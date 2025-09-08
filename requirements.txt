@@ -1,0 +1,3 @@
+﻿cloudscraper>=1.2.68
+pandas>=1.3.0
+beautifulsoup4>=4.11.0
