@@ -18,13 +18,13 @@ A Python library for fetching financial data from Financial Times Markets, inclu
 ## Installation
 
 ```bash
-pip install ftmarkets
+pip install ftgo
 ```
 
 ## Quick Start
 
 ```python
-from ftmarkets import search_securities, get_xid, get_historical_prices, get_holdings
+from ftgo import search_securities, get_xid, get_historical_prices, get_holdings
 
 # Search for a security
 results = search_securities('AAPL')
@@ -240,7 +240,7 @@ inception = search_profile_field(xid, 'inception')
 ## Complete Example
 
 ```python
-from ftmarkets import get_xid, get_historical_prices, get_holdings, get_fund_profile
+from ftgo import get_xid, get_historical_prices, get_holdings, get_fund_profile
 import matplotlib.pyplot as plt
 
 # Search for QQQ ETF

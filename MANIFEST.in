@@ -2,6 +2,6 @@ include README.md
 include LICENSE
 include requirements.txt
 include requirements-dev.txt
-recursive-include ftmarkets *.py
-recursive-exclude ftmarkets/__pycache__ *
+recursive-include ftgo *.py
+recursive-exclude ftgo/__pycache__ *
 exclude .gitignore

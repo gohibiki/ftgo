@@ -162,8 +162,8 @@ cython_debug/
 # Custom
 # Add your custom rules here
 
-# Add all files related to the FTMarkets library
-ftmarkets.egg-info/
+# Add all files related to the ftgo library
+ftgo.egg-info/
 .env
 
 # GitHub Actions workflow files
