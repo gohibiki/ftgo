@@ -11,7 +11,7 @@ from .holdings import get_holdings, get_fund_breakdown
 from .infos import get_fund_profile, get_fund_stats, get_available_fields, search_profile_field
 from .session import clear_cache, set_cache_ttl
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __author__ = "gohibiki"
 __email__ = "gohibiki@protonmail.com"
 __description__ = "A Python library for fetching financial data from FT Markets"

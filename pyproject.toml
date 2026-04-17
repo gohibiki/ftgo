@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ftgo"
-version = "1.1.0"
+version = "1.2.0"
 description = "A Python library for fetching financial data from FT Markets"
 readme = "README.md"
 license = "MIT"

@@ -131,35 +131,77 @@ def html_to_dataframe(html_content: str) -> pd.DataFrame:
     return pd.DataFrame()
 
 
+_CHUNK_YEARS = 10  # Max years per API request (~12yr limit, use 10 for safety)
+
+
+def _fetch_single_chunk(xid: str, date_from: str, date_to: str) -> pd.DataFrame:
+    """Fetch a single chunk of historical data (within API limits)."""
+    try:
+        json_data = fetch_historical_prices(xid, date_from, date_to)
+
+        if not json_data.get('html') or len(json_data['html']) == 0:
+            return pd.DataFrame()
+
+        return html_to_dataframe(json_data['html'])
+    except Exception as e:
+        logger.warning(f"Chunk fetch failed for XID {xid} ({date_from}-{date_to}): {e}")
+        return pd.DataFrame()
+
+
 def get_historical_prices(xid: str, date_from: str, date_to: str) -> pd.DataFrame:
     """
     Get historical price data for a security with full OHLCV data.
+    Automatically splits large date ranges into chunks to work around
+    the API's ~12 year per-request limit.
 
     Args:
         xid: The FT Markets XID
         date_from: Start date in DDMMYYYY format
         date_to: End date in DDMMYYYY format
+
+    Returns:
+        pandas.DataFrame with OHLCV data covering the full requested range
     """
     if not xid:
         raise ValueError("XID cannot be empty")
 
-    logger.info(f"Fetching historical data for XID {xid} from {date_from} to {date_to}")
+    start_date = datetime.strptime(date_from, "%d%m%Y")
+    end_date = datetime.strptime(date_to, "%d%m%Y")
+    span_days = (end_date - start_date).days
+    chunk_days = _CHUNK_YEARS * 365
 
-    json_data = fetch_historical_prices(xid, date_from, date_to)
+    # If range fits in one request, do a simple fetch
+    if span_days <= chunk_days:
+        logger.info(f"Fetching historical data for XID {xid} from {date_from} to {date_to}")
+        df = _fetch_single_chunk(xid, date_from, date_to)
+        logger.info(f"Successfully retrieved {len(df)} data points for XID {xid}")
+        return df
 
-    if not json_data.get('html'):
-        logger.warning("No HTML data in API response")
+    # Split into chunks and fetch each
+    logger.info(f"Fetching {span_days // 365}yr range for XID {xid} in {-(-span_days // chunk_days)} chunks")
+
+    chunks = []
+    chunk_end = end_date
+    while chunk_end > start_date:
+        chunk_start = max(start_date, chunk_end - pd.DateOffset(years=_CHUNK_YEARS))
+        cs = chunk_start.strftime("%d%m%Y")
+        ce = chunk_end.strftime("%d%m%Y")
+
+        df = _fetch_single_chunk(xid, cs, ce)
+        if not df.empty:
+            chunks.append(df)
+
+        chunk_end = chunk_start - pd.DateOffset(days=1)
+
+    if not chunks:
+        logger.warning(f"No data retrieved for XID {xid}")
         return pd.DataFrame()
 
-    html_content = json_data['html']
-    if len(html_content) == 0:
-        logger.warning("Empty HTML content in API response")
-        return pd.DataFrame()
+    combined = pd.concat(chunks, ignore_index=True)
+    combined = combined.drop_duplicates(subset=['date']).sort_values('date').reset_index(drop=True)
 
-    df = html_to_dataframe(html_content)
-
-    logger.info(f"Successfully retrieved {len(df)} data points for XID {xid}")
-    return df
+    logger.info(f"Successfully retrieved {len(combined)} data points for XID {xid} ({len(chunks)} chunks)")
+    return combined
 
 
 def get_multiple_historical_prices(
