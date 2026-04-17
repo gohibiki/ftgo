@@ -12,7 +12,7 @@ from typing import Dict, Any, List
 import logging
 import concurrent.futures
 
-from .session import get_scraper
+from .session import get_scraper, cached_get
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -30,8 +30,6 @@ def fetch_historical_prices(xid: str, date_from: str, date_to: str) -> Dict[str,
     Returns:
         JSON response from the API
     """
-    scraper = get_scraper()
-
     try:
         start_date = datetime.strptime(date_from, "%d%m%Y")
         end_date = datetime.strptime(date_to, "%d%m%Y")
@@ -41,8 +39,7 @@ def fetch_historical_prices(xid: str, date_from: str, date_to: str) -> Dict[str,
 
         url = f"https://markets.ft.com/data/equities/ajax/get-historical-prices?startDate={start_formatted}&endDate={end_formatted}&symbol={xid}"
 
-        response = scraper.get(url)
-        response.raise_for_status()
+        response = cached_get(url)
         return response.json()
     except Exception as e:
         logger.error(f"Failed to fetch historical data for XID {xid}: {e}")
