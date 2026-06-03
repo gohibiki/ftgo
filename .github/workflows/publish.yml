@@ -1,22 +1,16 @@
 name: Publish Python Package
 
-# Publishes to PyPI via Trusted Publishing (OIDC) when a version tag is pushed.
-# No API token is used; PyPI verifies the workflow's OIDC identity instead.
-# Trusted publisher on PyPI must be registered with:
-#   owner: gohibiki  repo: ftgo  workflow: publish.yml  environment: (none)
+# Publishes to PyPI on every push to main, using an API token stored in the
+# PYPI_API_TOKEN repository secret. skip-existing avoids failing the run when
+# the version in pyproject.toml/setup.py has not been bumped.
 on:
   push:
-    tags:
-      - 'v*'
-
-permissions:
-  contents: read
+    branches:
+      - main
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write  # REQUIRED for trusted publishing (OIDC)
 
     steps:
     - uses: actions/checkout@v4
@@ -33,3 +27,6 @@ jobs:
 
     - name: Publish package to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        password: ${{ secrets.PYPI_API_TOKEN }}
+        skip-existing: true
