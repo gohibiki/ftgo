@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ftgo"
-version = "1.3.0"
+dynamic = ["version"]
 description = "A Python library for fetching financial data from FT Markets"
 readme = "README.md"
 license = "MIT"
@@ -20,12 +20,11 @@ classifiers = [
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8", 
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Office/Business :: Financial",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
@@ -45,7 +44,7 @@ dependencies = [
     "pandas>=1.3.0",
     "beautifulsoup4>=4.11.0",
 ]
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 
 [project.optional-dependencies]
 dev = [
@@ -68,19 +67,16 @@ Documentation = "https://github.com/gohibiki/ftgo#readme"
 "Bug Reports" = "https://github.com/gohibiki/ftgo/issues"
 Changelog = "https://github.com/gohibiki/ftgo/blob/main/CHANGELOG.md"
 
-[project.scripts]
-ftgo-demo = "ftgo.examples.basic_usage:main"
-
 [tool.setuptools]
 packages = ["ftgo"]
 
-[tool.setuptools.package-data]
-ftgo = ["py.typed"]
+[tool.setuptools.dynamic]
+version = {attr = "ftgo.__version__"}
 
 # Black configuration
 [tool.black]
 line-length = 88
-target-version = ['py37']
+target-version = ['py39']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -103,7 +99,7 @@ line_length = 88
 
 # mypy configuration  
 [tool.mypy]
-python_version = "3.7"
+python_version = "3.9"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -120,11 +116,11 @@ strict_equality = true
 # pytest configuration
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = "-ra -q --strict-markers --cov=ftgo --cov-report=term-missing"
+addopts = "-ra -q --strict-markers -m 'not integration'"
 testpaths = ["tests"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
+    "integration: tests that call the live FT Markets site (run with -m integration)",
 ]
 
 # Coverage configuration

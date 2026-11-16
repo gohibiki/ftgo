@@ -166,8 +166,8 @@ cython_debug/
 ftgo.egg-info/
 .env
 
-# GitHub Actions workflow files
-.github/
+# Claude Code local settings
+.claude/settings.local.json
 
 # Twine
 dist/

@@ -1,7 +1,7 @@
-# FTMarkets
+# ftgo
 
 [![PyPI version](https://badge.fury.io/py/ftgo.svg)](https://badge.fury.io/py/ftgo)
-[![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A Python library for fetching financial data from Financial Times Markets, including historical stock prices, ETF holdings, fund profiles, and allocation breakdowns.
@@ -96,7 +96,7 @@ Get historical price data for a security with full OHLCV data.
 - `date_from` (str): Start date in DDMMYYYY format (e.g., "01012024")
 - `date_to` (str): End date in DDMMYYYY format (e.g., "31122024")
 
-**Returns:** pandas.DataFrame with columns: date, open, high, low, close, volume
+**Returns:** pandas.DataFrame with columns: date, open, high, low, close, volume, sorted by date. Ranges longer than 10 years are fetched in several requests automatically. The DataFrame is empty when FT Markets has no prices for the range, which is also what it reports for an unknown XID.
 
 ```python
 xid = get_xid('AAPL')
@@ -104,21 +104,36 @@ df = get_historical_prices(xid, "01012024", "31012024")
 print(df.head())
 ```
 
-#### `get_multiple_historical_prices(xids, date_from, date_to)`
+#### `get_multiple_historical_prices(xids, date_from, date_to, max_workers=3)`
 
-Get historical data for multiple securities concurrently.
+Get historical data for multiple securities concurrently, in one long-format DataFrame.
 
 **Parameters:**
 - `xids` (list): List of FT Markets XIDs
 - `date_from` (str): Start date in DDMMYYYY format
 - `date_to` (str): End date in DDMMYYYY format
+- `max_workers` (int): Maximum number of concurrent requests
 
-**Returns:** pandas.DataFrame with concatenated data for all securities
+**Returns:** pandas.DataFrame with columns: xid, date, open, high, low, close, volume
 
 ```python
 xids = [get_xid('AAPL'), get_xid('MSFT')]
 df = get_multiple_historical_prices(xids, "01012024", "31012024")
+
+# One close-price column per security
+closes = df.pivot(index='date', columns='xid', values='close')
 ```
+
+#### `get_multiple_historical_prices_dict(xids, date_from, date_to, max_workers=3)`
+
+Same as above, but returns a dictionary mapping each XID to its own DataFrame.
+
+```python
+prices = get_multiple_historical_prices_dict(xids, "01012024", "31012024")
+aapl = prices[xids[0]]
+```
+
+Both functions log and leave out securities that fail to download or have no data, so compare the result with `xids` to detect them.
 
 ### Holdings Data
 
@@ -132,7 +147,7 @@ Get holdings and allocation data for ETFs and funds.
   - `"asset_allocation"`: Asset class breakdown (stocks, bonds, cash)
   - `"sector_weights"`: Sector allocation
   - `"geographic_allocation"`: Geographic allocation
-  - `"top_holdings"`: Top holdings by weight
+  - `"top_holdings"`: Top holdings, with columns Holding, Symbol, 1Y Change, Weight
   - `"all"`: All holdings data types as a tuple
 
 **Returns:** pandas.DataFrame or tuple of DataFrames
@@ -237,6 +252,17 @@ fees = search_profile_field(xid, 'fee')
 inception = search_profile_field(xid, 'inception')
 ```
 
+### Caching
+
+Price, holdings and profile pages are cached in memory for one hour. Searches are never cached.
+
+```python
+from ftgo import clear_cache, set_cache_ttl
+
+set_cache_ttl(300)  # keep responses for 5 minutes (0 disables caching)
+clear_cache()       # drop everything cached so far
+```
+
 ## Complete Example
 
 ```python
@@ -271,24 +297,41 @@ print(asset_allocation)
 
 ## Error Handling
 
-The library includes logging and error handling, but you should wrap calls in try-except blocks for production use:
+Failures are raised, never returned as empty data:
+
+- `ValueError`: invalid arguments, a ticker with no search results, or an XID that FT Markets does not recognise
+- `ftgo.FTMarketsError`: FT Markets answered in an unexpected format (request rejected, or the site changed)
+- `requests.RequestException`: network errors and HTTP error statuses, after 3 attempts
 
 ```python
+import requests
+from ftgo import FTMarketsError, get_xid, get_historical_prices
+
 try:
     xid = get_xid('INVALID_TICKER')
     data = get_historical_prices(xid, "01012024", "31012024")
 except ValueError as e:
-    print(f"Error: {e}")
-except Exception as e:
-    print(f"Unexpected error: {e}")
+    print(f"Bad input: {e}")
+except (FTMarketsError, requests.RequestException) as e:
+    print(f"Could not fetch data: {e}")
 ```
+
+An empty DataFrame means the request worked and FT Markets has no data, for example a date range with no trading days or an equity that has no holdings.
 
 ## Requirements
 
-- Python 3.7+
+- Python 3.9+
 - cloudscraper >= 1.2.68
 - pandas >= 1.3.0
 - beautifulsoup4 >= 4.11.0
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+pytest                 # offline tests
+pytest -m integration  # tests against the live FT Markets site
+```
 
 ## Contributing
 

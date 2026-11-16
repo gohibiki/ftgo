@@ -1,15 +1,42 @@
-name: Publish Python Package
+name: Test and Publish Python Package
 
-# Publishes to PyPI on every push to main, using an API token stored in the
-# PYPI_API_TOKEN repository secret. skip-existing avoids failing the run when
-# the version in pyproject.toml/setup.py has not been bumped.
+# Runs the offline test suite on every push to main and on pull requests.
+# On a push to main, publishes to PyPI once the tests pass, using an API token
+# stored in the PYPI_API_TOKEN repository secret. skip-existing avoids failing
+# the run when __version__ in ftgo/__init__.py has not been bumped.
 on:
   push:
     branches:
       - main
+  pull_request:
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install package and test dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install . pytest
+
+    - name: Run tests
+      run: python -m pytest
+
   publish:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:

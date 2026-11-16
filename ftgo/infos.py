@@ -1,30 +1,34 @@
 """
-Profile and information data functionality for FTMarkets.
+Profile and information data functionality for ftgo.
 
 This module provides functions to fetch ETF/fund profile information,
 key statistics, and investment details from FT Markets.
 """
 
+import logging
+from typing import Dict, List
+
 import pandas as pd
 from bs4 import BeautifulSoup
-from typing import Dict
-import logging
 
-from .session import cached_get
+from .session import fetch_tearsheet
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
+PROFILE_COLUMNS = ['Field', 'Value']
 
 
 def fetch_profile_page(xid: str) -> str:
     """
     Fetch the profile/summary page HTML for a given XID from FT Markets.
     Uses cached session.
+
+    Raises:
+        ValueError: If FT Markets does not recognise the XID
     """
     try:
-        url = f"https://markets.ft.com/data/etfs/tearsheet/summary?s={xid}"
-        response = cached_get(url)
-        return response.text
+        return fetch_tearsheet("summary", xid)
     except Exception as e:
         logger.error(f"Failed to fetch profile page for XID {xid}: {e}")
         raise
@@ -34,38 +38,29 @@ def extract_profile_data(html_content: str) -> pd.DataFrame:
     """Extract profile and investment data from FT Markets ETF page HTML."""
     if not html_content:
         logger.warning("No HTML content provided")
-        return pd.DataFrame(columns=['Field', 'Value'])
+        return pd.DataFrame(columns=PROFILE_COLUMNS)
 
-    try:
-        soup = BeautifulSoup(html_content, 'html.parser')
+    soup = BeautifulSoup(html_content, 'html.parser')
 
-        profile_section = soup.find('div', {'data-f2-app-id': 'mod-profile-and-investment-app'})
+    profile_section = soup.find('div', {'data-f2-app-id': 'mod-profile-and-investment-app'})
 
-        if not profile_section:
-            logger.warning("Profile and Investment section not found")
-            return pd.DataFrame(columns=['Field', 'Value'])
+    if not profile_section:
+        logger.warning("Profile and Investment section not found")
+        return pd.DataFrame(columns=PROFILE_COLUMNS)
 
-        data = []
-        tables = profile_section.find_all('table')
+    data = []
+    for table in profile_section.find_all('table'):
+        for row in table.find_all('tr'):
+            th = row.find('th')
+            td = row.find('td')
 
-        for table in tables:
-            rows = table.find_all('tr')
-            for row in rows:
-                th = row.find('th')
-                td = row.find('td')
+            if th and td:
+                field = th.get_text(strip=True)
+                value = ' '.join(td.get_text(separator=' ', strip=True).split())
+                data.append([field, value])
 
-                if th and td:
-                    field = th.get_text(strip=True)
-                    value = td.get_text(separator=' ', strip=True)
-                    value = ' '.join(value.split())
-                    data.append({'Field': field, 'Value': value})
-
-        logger.info(f"Extracted {len(data)} profile data points")
-        return pd.DataFrame(data)
-
-    except Exception as e:
-        logger.error(f"Error extracting profile data: {e}")
-        return pd.DataFrame(columns=['Field', 'Value'])
+    logger.info(f"Extracted {len(data)} profile data points")
+    return pd.DataFrame(data, columns=PROFILE_COLUMNS)
 
 
 def get_fund_profile(xid: str) -> pd.DataFrame:
@@ -76,23 +71,19 @@ def get_fund_profile(xid: str) -> pd.DataFrame:
         xid: The FT Markets XID
 
     Returns:
-        pandas.DataFrame with Field and Value columns
+        pandas.DataFrame with Field and Value columns, empty when FT Markets
+        has no profile for the security (e.g. for equities)
+
+    Raises:
+        ValueError: If the XID is empty or FT Markets does not recognise it
+        requests.RequestException: On network errors or HTTP error statuses
     """
     if not xid:
         raise ValueError("Missing required parameter: xid")
 
     logger.info(f"Fetching profile data for XID {xid}")
 
-    try:
-        html_content = fetch_profile_page(xid)
-        profile_data = extract_profile_data(html_content)
-
-        logger.info(f"Successfully retrieved profile data for XID {xid}")
-        return profile_data
-
-    except Exception as e:
-        logger.error(f"Error retrieving profile data: {e}")
-        raise
+    return extract_profile_data(fetch_profile_page(xid))
 
 
 def get_fund_stats(xid: str) -> Dict[str, str]:
@@ -107,16 +98,10 @@ def get_fund_stats(xid: str) -> Dict[str, str]:
     """
     profile_df = get_fund_profile(xid)
 
-    if profile_df.empty:
-        return {}
-
-    stats_dict = dict(zip(profile_df['Field'], profile_df['Value']))
-
-    logger.info(f"Converted profile data to dictionary with {len(stats_dict)} fields")
-    return stats_dict
+    return dict(zip(profile_df['Field'], profile_df['Value']))
 
 
-def get_available_fields(xid: str) -> list:
+def get_available_fields(xid: str) -> List[str]:
     """
     Get list of all available profile fields for a fund.
 
@@ -126,14 +111,7 @@ def get_available_fields(xid: str) -> list:
     Returns:
         List of all field names available for this fund
     """
-    profile_df = get_fund_profile(xid)
-
-    if profile_df.empty:
-        return []
-
-    field_list = profile_df['Field'].tolist()
-    logger.info(f"Found {len(field_list)} available fields")
-    return field_list
+    return get_fund_profile(xid)['Field'].tolist()
 
 
 def search_profile_field(xid: str, search_term: str) -> pd.DataFrame:
@@ -142,7 +120,7 @@ def search_profile_field(xid: str, search_term: str) -> pd.DataFrame:
 
     Args:
         xid: The FT Markets XID
-        search_term: Term to search for in field names (case-insensitive)
+        search_term: Text to search for in field names (case-insensitive)
 
     Returns:
         pandas.DataFrame with matching fields and values
@@ -150,12 +128,12 @@ def search_profile_field(xid: str, search_term: str) -> pd.DataFrame:
     profile_df = get_fund_profile(xid)
 
     if profile_df.empty:
-        return pd.DataFrame(columns=['Field', 'Value'])
+        return profile_df
 
     matches = profile_df[profile_df['Field'].str.contains(search_term, case=False, na=False)]
 
     logger.info(f"Found {len(matches)} fields matching '{search_term}'")
-    return matches
+    return matches.reset_index(drop=True)
 
 
 __all__ = [
